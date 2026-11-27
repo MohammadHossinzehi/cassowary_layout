@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cassowary Layout Playground</title>
+<style>
+  :root { --bg:#f6f7f9; --panel:#fff; --ink:#1d2330; --muted:#6a7385; --line:#d9dde5; --accent:#3a6df0; --warn:#c2410c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--panel); display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; }
+  header span { color:var(--muted); }
+  main { display:grid; grid-template-columns:minmax(300px, 420px) 1fr; gap:16px; padding:16px; }
+  @media (max-width: 820px) { main { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  textarea { width:100%; height:420px; font:12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; border:1px solid var(--line); border-radius:6px; padding:8px; resize:vertical; }
+  select, button { font:inherit; padding:4px 8px; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+  #stage { position:relative; height:640px; overflow:hidden; background:repeating-conic-gradient(#eef0f4 0 25%, #f8f9fb 0 50%) 0 0/20px 20px; border-radius:6px; }
+  #win { position:absolute; left:0; top:0; border:2px solid var(--ink); background:rgba(255,255,255,.6); }
+  .box { position:absolute; border:1.5px solid; border-radius:4px; font:11px ui-monospace, monospace; padding:3px 5px; overflow:hidden; white-space:nowrap; transition:none; }
+  #grip { position:absolute; width:18px; height:18px; background:var(--accent); border-radius:3px; cursor:nwse-resize; }
+  #status { color:var(--muted); font-size:12.5px; }
+  #relaxed { font:12px ui-monospace, monospace; color:var(--warn); margin:8px 0 0; padding-left:18px; }
+  #error { color:#b91c1c; font:12px ui-monospace, monospace; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cassowary layout playground</h1>
+  <span>Drag the blue handle to resize. Every frame is an incremental dual simplex solve.</span>
+</header>
+<main>
+  <section class="card">
+    <div class="row">
+      <label>Example <select id="example">
+        <option value="holy_grail.cass">holy grail page</option>
+        <option value="dashboard.cass">dashboard grid</option>
+      </select></label>
+      <button id="run">Run script</button>
+    </div>
+    <textarea id="src" spellcheck="false"></textarea>
+    <div id="error"></div>
+  </section>
+  <section class="card">
+    <div class="row" id="status">loading</div>
+    <div id="stage"><div id="win"></div><div id="grip"></div></div>
+    <ol id="relaxed"></ol>
+  </section>
+</main>
+<script type="module">
+import { Layout } from '../src/index.js';
+
+const $ = (id) => document.getElementById(id);
+const palette = ['#3a6df0', '#0f9d76', '#c2410c', '#8b5cf6', '#db2777', '#0891b2', '#ca8a04', '#4b5563'];
+let L = null;
+let winName = null;
+let size = { w: 0, h: 0 };
+
+function detectWindow(layout) {
+  // The window is the box whose width and height are edit variables.
+  for (const name of layout.boxes.keys()) {
+    const b = layout.boxes.get(name);
+    if (layout.solver.hasEditVariable(b.width) && layout.solver.hasEditVariable(b.height)) return name;
+  }
+  return null;
+}
+
+function build() {
+  $('error').textContent = '';
+  try {
+    const next = new Layout();
+    next.run($('src').value);
+    const w = detectWindow(next);
+    if (!w) throw new Error('script needs a box whose width and height are suggested (edit) variables');
+    L = next;
+    winName = w;
+    size = { w: L.value(`${w}.width`), h: L.value(`${w}.height`) };
+    render(0);
+  } catch (err) {
+    $('error').textContent = err.message;
+  }
+}
+
+function render(ms) {
+  const stage = $('stage');
+  stage.querySelectorAll('.box').forEach((n) => n.remove());
+  const rects = L.rects();
+  const scale = Math.min(1, (stage.clientWidth - 30) / Math.max(rects[winName].width, 1), (stage.clientHeight - 30) / Math.max(rects[winName].height, 1));
+  const win = rects[winName];
+  Object.assign($('win').style, { width: `${win.width * scale}px`, height: `${win.height * scale}px` });
+  Object.assign($('grip').style, { left: `${win.width * scale - 9}px`, top: `${win.height * scale - 9}px` });
+  let i = 0;
+  for (const [name, r] of Object.entries(rects)) {
+    if (name === winName) continue;
+    const el = document.createElement('div');
+    el.className = 'box';
+    const color = palette[i++ % palette.length];
+    Object.assign(el.style, {
+      left: `${r.left * scale}px`, top: `${r.top * scale}px`, width: `${r.width * scale}px`, height: `${r.height * scale}px`,
+      borderColor: color, color, background: `${color}14`,
+    });
+    el.textContent = `${name} ${Math.round(r.width)}×${Math.round(r.height)}`;
+    stage.appendChild(el);
+  }
+  const s = L.solver.stats;
+  $('status').textContent = `${L.solver.constraintCount} constraints · window ${Math.round(win.width)}×${Math.round(win.height)} · solve ${ms < 0.1 ? "under 0.1" : ms.toFixed(2)} ms · ${s.pivots} primal / ${s.dualPivots} dual pivots so far · scale ${scale.toFixed(2)}`;
+  const relaxed = L.violations();
+  $('relaxed').innerHTML = relaxed.map((v) => `<li>${v.constraint.replace(/</g, '&lt;')} off by ${v.amount.toFixed(1)}</li>`).join('');
+}
+
+function resizeTo(w, h) {
+  const t = performance.now();
+  L.suggest(`${winName}.width`, w);
+  L.suggest(`${winName}.height`, h);
+  L.solve();
+  render(performance.now() - t);
+}
+
+let drag = null;
+$('grip').addEventListener('pointerdown', (e) => {
+  const scale = parseFloat($('win').style.width) / L.value(`${winName}.width`);
+  drag = { x: e.clientX, y: e.clientY, w: size.w, h: size.h, scale };
+  $('grip').setPointerCapture(e.pointerId);
+});
+$('grip').addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  size = { w: Math.max(50, drag.w + (e.clientX - drag.x) / drag.scale), h: Math.max(50, drag.h + (e.clientY - drag.y) / drag.scale) };
+  resizeTo(size.w, size.h);
+});
+$('grip').addEventListener('pointerup', () => { drag = null; });
+
+async function loadExample() {
+  $('src').value = await (await fetch(`../examples/${$('example').value}`)).text();
+  build();
+}
+$('example').addEventListener('change', loadExample);
+$('run').addEventListener('click', build);
+loadExample();
+</script>
+</body>
+</html>
