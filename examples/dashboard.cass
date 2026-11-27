@@ -1,0 +1,46 @@
+# A responsive dashboard: sidebar, a toolbar, and a 2x2 grid of cards
+# that keep a 16:9 aspect ratio when there is room for it.
+# Run:  node bin/cassowary.js solve examples/dashboard.cass win.width=900
+box win sidebar toolbar a b c d
+
+win.left == 0
+win.top == 0
+suggest win.width = 1280
+suggest win.height = 800
+
+sidebar.left == win.left
+sidebar.top == win.top
+sidebar.bottom == win.bottom
+sidebar.width == 220 @strong
+sidebar.width >= 64
+sidebar.width <= win.width / 4 @medium
+
+toolbar.left == sidebar.right
+toolbar.right == win.right
+toolbar.top == win.top
+toolbar.height == 56
+
+# Grid: 24px gutters, equal sized cards.
+a.left == sidebar.right + 24
+c.left == a.left
+b.left == a.right + 24
+d.left == b.left
+b.right == win.right - 24
+d.right == b.right
+a.top == toolbar.bottom + 24
+b.top == a.top
+c.top == a.bottom + 24
+d.top == c.top
+c.bottom <= win.bottom - 24
+d.bottom == c.bottom
+a.width == b.width
+a.height == c.height
+c.width == a.width
+d.width == b.width
+b.height == a.height
+d.height == c.height
+
+# Prefer 16:9 cards, but filling the height matters less than fitting.
+9 * a.width == 16 * a.height @medium
+c.bottom == win.bottom - 24 @weak
+a.width >= 160
