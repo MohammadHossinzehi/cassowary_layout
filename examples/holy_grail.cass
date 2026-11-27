@@ -1,0 +1,42 @@
+# The classic "holy grail" page: header, footer, three columns.
+# Run:  node bin/cassowary.js solve examples/holy_grail.cass
+box page header nav main aside footer
+
+page.left == 0
+page.top == 0
+suggest page.width = 1024
+suggest page.height = 768
+
+var gap
+gap == 12
+
+# Header and footer span the page.
+header.left == page.left + gap
+header.right == page.right - gap
+header.top == page.top + gap
+header.height == 64 @strong
+footer.left == header.left
+footer.right == header.right
+footer.bottom == page.bottom - gap
+footer.height == 48 @strong
+
+# Three columns between them, sharing a top and bottom edge.
+nav.left == header.left
+aside.right == header.right
+main.left == nav.right + gap
+aside.left == main.right + gap
+nav.top == header.bottom + gap
+main.top == nav.top
+aside.top == nav.top
+nav.bottom == footer.top - gap
+main.bottom == nav.bottom
+aside.bottom == nav.bottom
+
+# Side columns would like 200px, never below 120px, and the main column
+# should be at least as wide as both sides together.
+nav.width == 200 @medium
+aside.width == 200 @medium
+nav.width >= 120
+aside.width >= 120
+nav.width == aside.width @weak
+main.width >= nav.width + aside.width @strong
